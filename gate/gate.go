@@ -139,7 +139,7 @@ func (a *agent) LocalAddr() net.Addr {
 	return a.conn.LocalAddr()
 }
 
-func (a *agent) RemoteAddr() net.Addr {
+func (a *agent) RemoteAddr() (net.Addr, string) {
 	return a.conn.RemoteAddr()
 }
 

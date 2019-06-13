@@ -7,7 +7,7 @@ import (
 type Agent interface {
 	WriteMsg(msg interface{})
 	LocalAddr() net.Addr
-	RemoteAddr() net.Addr
+	RemoteAddr() (net.Addr, string)
 	Close()
 	Destroy()
 	UserData() interface{}

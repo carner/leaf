@@ -16,8 +16,8 @@ import (
 // -------------------------
 type Processor struct {
 	littleEndian bool
-	msgInfo      []*MsgInfo
-	msgID        map[reflect.Type]uint16
+	msgInfo      map[uint32]*MsgInfo
+	msgID        map[reflect.Type]uint32
 }
 
 type MsgInfo struct {
@@ -30,14 +30,15 @@ type MsgInfo struct {
 type MsgHandler func([]interface{})
 
 type MsgRaw struct {
-	msgID      uint16
+	msgID      uint32
 	msgRawData []byte
 }
 
 func NewProcessor() *Processor {
 	p := new(Processor)
 	p.littleEndian = false
-	p.msgID = make(map[reflect.Type]uint16)
+	p.msgInfo = make(map[uint32]*MsgInfo)
+	p.msgID = make(map[reflect.Type]uint32)
 	return p
 }
 
@@ -47,7 +48,7 @@ func (p *Processor) SetByteOrder(littleEndian bool) {
 }
 
 // It's dangerous to call the method on routing or marshaling (unmarshaling)
-func (p *Processor) Register(msg proto.Message) uint16 {
+func (p *Processor) Register(msg proto.Message, id uint32) uint32 {
 	msgType := reflect.TypeOf(msg)
 	if msgType == nil || msgType.Kind() != reflect.Ptr {
 		log.Fatal("protobuf message pointer required")
@@ -55,14 +56,16 @@ func (p *Processor) Register(msg proto.Message) uint16 {
 	if _, ok := p.msgID[msgType]; ok {
 		log.Fatal("message %s is already registered", msgType)
 	}
-	if len(p.msgInfo) >= math.MaxUint16 {
-		log.Fatal("too many protobuf messages (max = %v)", math.MaxUint16)
+	if len(p.msgInfo) >= math.MaxUint32 {
+		log.Fatal("too many protobuf messages (max = %v)", math.MaxUint32)
 	}
 
 	i := new(MsgInfo)
 	i.msgType = msgType
-	p.msgInfo = append(p.msgInfo, i)
-	id := uint16(len(p.msgInfo) - 1)
+	//p.msgInfo = append(p.msgInfo, i)
+	//id := uint32(len(p.msgInfo) - 1)
+	//p.msgID[msgType] = id
+	p.msgInfo[id] = i
 	p.msgID[msgType] = id
 	return id
 }
@@ -90,8 +93,8 @@ func (p *Processor) SetHandler(msg proto.Message, msgHandler MsgHandler) {
 }
 
 // It's dangerous to call the method on routing or marshaling (unmarshaling)
-func (p *Processor) SetRawHandler(id uint16, msgRawHandler MsgHandler) {
-	if id >= uint16(len(p.msgInfo)) {
+func (p *Processor) SetRawHandler(id uint32, msgRawHandler MsgHandler) {
+	if id >= uint32(len(p.msgInfo)) {
 		log.Fatal("message id %v not registered", id)
 	}
 
@@ -102,7 +105,7 @@ func (p *Processor) SetRawHandler(id uint16, msgRawHandler MsgHandler) {
 func (p *Processor) Route(msg interface{}, userData interface{}) error {
 	// raw
 	if msgRaw, ok := msg.(MsgRaw); ok {
-		if msgRaw.msgID >= uint16(len(p.msgInfo)) {
+		if msgRaw.msgID >= uint32(len(p.msgInfo)) {
 			return fmt.Errorf("message id %v not registered", msgRaw.msgID)
 		}
 		i := p.msgInfo[msgRaw.msgID]
@@ -130,28 +133,32 @@ func (p *Processor) Route(msg interface{}, userData interface{}) error {
 
 // goroutine safe
 func (p *Processor) Unmarshal(data []byte) (interface{}, error) {
-	if len(data) < 2 {
+	if len(data) < 4 {
 		return nil, errors.New("protobuf data too short")
 	}
 
 	// id
-	var id uint16
+	var id uint32
 	if p.littleEndian {
-		id = binary.LittleEndian.Uint16(data)
+		id = binary.LittleEndian.Uint32(data)
 	} else {
-		id = binary.BigEndian.Uint16(data)
+		id = binary.BigEndian.Uint32(data)
 	}
-	if id >= uint16(len(p.msgInfo)) {
+
+	//if id >= uint32(len(p.msgInfo)) {
+	//	return nil, fmt.Errorf("message id %v not registered", id)
+	//}
+	if ok := p.msgInfo[id]; ok == nil {
 		return nil, fmt.Errorf("message id %v not registered", id)
 	}
 
 	// msg
 	i := p.msgInfo[id]
 	if i.msgRawHandler != nil {
-		return MsgRaw{id, data[2:]}, nil
+		return MsgRaw{id, data[4:]}, nil
 	} else {
 		msg := reflect.New(i.msgType.Elem()).Interface()
-		return msg, proto.UnmarshalMerge(data[2:], msg.(proto.Message))
+		return msg, proto.UnmarshalMerge(data[4:], msg.(proto.Message))
 	}
 }
 
@@ -166,11 +173,11 @@ func (p *Processor) Marshal(msg interface{}) ([][]byte, error) {
 		return nil, err
 	}
 
-	id := make([]byte, 2)
+	id := make([]byte, 4)
 	if p.littleEndian {
-		binary.LittleEndian.PutUint16(id, _id)
+		binary.LittleEndian.PutUint32(id, (_id))
 	} else {
-		binary.BigEndian.PutUint16(id, _id)
+		binary.BigEndian.PutUint32(id, (_id))
 	}
 
 	// data
@@ -179,8 +186,8 @@ func (p *Processor) Marshal(msg interface{}) ([][]byte, error) {
 }
 
 // goroutine safe
-func (p *Processor) Range(f func(id uint16, t reflect.Type)) {
+func (p *Processor) Range(f func(id uint32, t reflect.Type)) {
 	for id, i := range p.msgInfo {
-		f(uint16(id), i.msgType)
+		f(uint32(id), i.msgType)
 	}
 }

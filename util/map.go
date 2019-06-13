@@ -29,6 +29,12 @@ func (m *Map) Get(key interface{}) interface{} {
 	return m.UnsafeGet(key)
 }
 
+func (m *Map) GetAll() interface{} {
+	m.RLock()
+	defer m.RUnlock()
+	return m.m
+}
+
 func (m *Map) UnsafeSet(key interface{}, value interface{}) {
 	m.init()
 	m.m[key] = value

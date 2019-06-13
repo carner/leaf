@@ -6,6 +6,7 @@ import (
 	"github.com/name5566/leaf/log"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -39,6 +40,22 @@ func (handler *WSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", 405)
 		return
 	}
+
+	// 获取客户端地址
+	var clientIp, clientPort, remoteAddr string
+	if r.Header.Get("X-Forwarded-For") != "" {
+		clientIp = strings.Split(r.Header.Get("X-Forwarded-For"), ",")[0]
+	}
+	if r.Header.Get("X-Real-IP") != "" {
+		clientIp = r.Header.Get("X-Real-IP")
+	}
+	if r.Header.Get("X-Real-Port") != "" {
+		clientPort = r.Header.Get("X-Real-Port")
+	}
+	if clientIp != "" || clientPort != "" {
+		remoteAddr = clientIp + ":" + clientPort
+	}
+
 	conn, err := handler.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Debug("upgrade error: %v", err)
@@ -64,7 +81,7 @@ func (handler *WSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	handler.conns[conn] = struct{}{}
 	handler.mutexConns.Unlock()
 
-	wsConn := newWSConn(conn, handler.pendingWriteNum, handler.maxMsgLen)
+	wsConn := newWSConn(conn, handler.pendingWriteNum, handler.maxMsgLen, remoteAddr)
 	agent := handler.newAgent(wsConn)
 	agent.Run()
 

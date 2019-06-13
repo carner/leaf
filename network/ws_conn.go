@@ -16,11 +16,14 @@ type WSConn struct {
 	writeChan chan []byte
 	maxMsgLen uint32
 	closeFlag bool
+	remoteAddr string
 }
 
-func newWSConn(conn *websocket.Conn, pendingWriteNum int, maxMsgLen uint32) *WSConn {
+func newWSConn(conn *websocket.Conn, pendingWriteNum int, maxMsgLen uint32, remoteAddr string) *WSConn {
 	wsConn := new(WSConn)
 	wsConn.conn = conn
+	wsConn.remoteAddr = remoteAddr
+
 	wsConn.writeChan = make(chan []byte, pendingWriteNum)
 	wsConn.maxMsgLen = maxMsgLen
 
@@ -87,8 +90,8 @@ func (wsConn *WSConn) LocalAddr() net.Addr {
 	return wsConn.conn.LocalAddr()
 }
 
-func (wsConn *WSConn) RemoteAddr() net.Addr {
-	return wsConn.conn.RemoteAddr()
+func (wsConn *WSConn) RemoteAddr() (net.Addr, string) {
+	return wsConn.conn.RemoteAddr(), wsConn.remoteAddr
 }
 
 // goroutine not safe

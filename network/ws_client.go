@@ -102,7 +102,7 @@ reconnect:
 	client.conns[conn] = struct{}{}
 	client.Unlock()
 
-	wsConn := newWSConn(conn, client.PendingWriteNum, client.MaxMsgLen)
+	wsConn := newWSConn(conn, client.PendingWriteNum, client.MaxMsgLen, "")
 	agent := client.NewAgent(wsConn)
 	agent.Run()
 
